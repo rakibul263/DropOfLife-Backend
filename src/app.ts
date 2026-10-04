@@ -4,6 +4,7 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerDocument } from './app/config/swagger';
 import routes from './app/routes';
 import { globalErrorHandler } from './app/middlewares/globalErrorHandler';
+import { arcjetMiddleware } from './app/middlewares/arcjetMiddleware';
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.get('/', (req: Request, res: Response) => {
   res.json({
     message: '🩸 Welcome to DropOfLife REST API (Modular MVC Pattern) — জীবনের এক ফোঁটা',
     architecture: 'Modular MVC Pattern (src/app/modules/*)',
+    security: 'Arcjet Bot Detection & Shield Active',
     docs: '/docs',
     rawSpec: '/docs.json',
     health: '/api/v1/health',
@@ -74,6 +76,9 @@ app.get('/', (req: Request, res: Response) => {
     hotline: '+8801521711716',
   });
 });
+
+// Arcjet Security Middleware: Rate Limiting & Bot/WAF Protection
+app.use(arcjetMiddleware);
 
 // API version 1 with Modular MVC routing
 app.use('/api/v1', routes);
