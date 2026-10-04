@@ -36,10 +36,16 @@ const createBloodRequest = async (payload: ICreateBloodRequestPayload) => {
 
 const updateBloodRequestStatus = async (
   id: string,
-  status: string,
-  donorName?: string
+  status?: string,
+  donorName?: string,
+  action?: 'pledge' | 'cancel'
 ) => {
-  const updated = await dataStore.updateRequestStatus(id, status, donorName);
+  const updated = await dataStore.updateRequestStatus(
+    id,
+    status,
+    donorName,
+    action
+  );
   if (!updated) {
     throw new Error('Blood request not found');
   }

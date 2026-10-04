@@ -77,18 +77,34 @@ const createRequest = catchAsync(
 const updateRequestStatus = catchAsync(
   async (req: CustomAuthRequest, res: Response): Promise<void> => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const { status, donorName } = req.body;
+    const { status, donorName, action } = req.body;
+
+    if (action === 'pledge' || action === 'cancel') {
+      if (!req.user && !donorName) {
+        res.status(401).json({
+          success: false,
+          message: 'Access Denied: You must be logged in to pledge blood donation.',
+        });
+        return;
+      }
+    }
+
+    const donorIdentifier = req.user?.name || donorName;
 
     const updated = await BloodRequestService.updateBloodRequestStatus(
       id,
       status,
-      donorName || req.user?.name
+      donorIdentifier,
+      action
     );
 
     sendResponse(res, {
       statusCode: 200,
       success: true,
-      message: `Request status updated to ${status}`,
+      message:
+        action === 'cancel'
+          ? 'Pledge cancelled successfully'
+          : `Request status updated to ${updated.status}`,
       data: { request: updated },
     });
   }
