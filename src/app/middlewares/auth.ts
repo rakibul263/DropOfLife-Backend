@@ -68,3 +68,37 @@ export const auth = (...requiredRoles: string[]) => {
     }
   };
 };
+
+export const authOptional = () => {
+  return async (
+    req: CustomAuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+      let token = '';
+
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      } else if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+      }
+
+      if (token) {
+        try {
+          const verifiedUser = jwtHelpers.verifyToken(
+            token,
+            config.jwtSecret as Secret
+          ) as IAuthUser;
+          req.user = verifiedUser;
+        } catch (e) {
+          // Token expired or invalid, proceed as guest
+        }
+      }
+      next();
+    } catch (err) {
+      next();
+    }
+  };
+};
