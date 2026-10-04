@@ -5,6 +5,7 @@ import { InventoryModel } from '../models/inventory.model';
 import { CampModel } from '../models/camp.model';
 import { PaymentModel } from '../models/payment.model';
 import mongoose from 'mongoose';
+import prisma from '../app/shared/prisma';
 
 class ResilientDataStore {
   public users: any[] = [...SEED_USERS];
@@ -150,15 +151,76 @@ class ResilientDataStore {
     return newDoc;
   }
 
-  async updateRequestStatus(id: string, status: string, donorName?: string) {
-    const idx = this.requests.findIndex((r) => r._id.toString() === id.toString());
+  async updateRequestStatus(
+    id: string,
+    status?: string,
+    donorName?: string,
+    action?: 'pledge' | 'cancel'
+  ) {
+    const idx = this.requests.findIndex(
+      (r) => r._id.toString() === id.toString()
+    );
     if (idx !== -1) {
-      this.requests[idx].status = status as any;
-      if (donorName && !this.requests[idx].assignedDonors.includes(donorName)) {
-        this.requests[idx].assignedDonors.push(donorName);
-        this.requests[idx].matchedDonorsCount += 1;
+      if (status) {
+        this.requests[idx].status = status as any;
       }
+
+      if (action === 'cancel' || (!action && status === 'Pending' && donorName)) {
+        if (donorName) {
+          this.requests[idx].assignedDonors = (
+            this.requests[idx].assignedDonors || []
+          ).filter((d: string) => d !== donorName);
+          this.requests[idx].matchedDonorsCount = Math.max(
+            0,
+            (this.requests[idx].matchedDonorsCount || 1) - 1
+          );
+        }
+        if (
+          this.requests[idx].assignedDonors.length === 0 &&
+          this.requests[idx].status === 'In Progress'
+        ) {
+          this.requests[idx].status = 'Pending';
+        }
+      } else {
+        // Pledge action or default with donorName
+        if (donorName) {
+          if (!this.requests[idx].assignedDonors) {
+            this.requests[idx].assignedDonors = [];
+          }
+          if (!this.requests[idx].assignedDonors.includes(donorName)) {
+            this.requests[idx].assignedDonors.push(donorName);
+            this.requests[idx].matchedDonorsCount =
+              (this.requests[idx].matchedDonorsCount || 0) + 1;
+          }
+          if (this.requests[idx].status === 'Pending') {
+            this.requests[idx].status = 'In Progress';
+          }
+        }
+      }
+
       this.requests[idx].updatedAt = new Date();
+
+      if (this.isMongoConnected) {
+        try {
+          await BloodRequestModel.findByIdAndUpdate(
+            this.requests[idx]._id,
+            this.requests[idx]
+          );
+        } catch (err) {}
+      }
+
+      try {
+        await prisma.bloodRequest.update({
+          where: { id: this.requests[idx]._id },
+          data: {
+            assignedDonors: this.requests[idx].assignedDonors,
+            matchedDonorsCount: this.requests[idx].matchedDonorsCount,
+            status: this.requests[idx].status,
+            updatedAt: this.requests[idx].updatedAt,
+          },
+        });
+      } catch (err) {}
+
       return this.requests[idx];
     }
     return null;
@@ -209,8 +271,26 @@ class ResilientDataStore {
     if (camp) {
       if (!camp.registeredVolunteers.includes(volunteerName)) {
         camp.registeredVolunteers.push(volunteerName);
-        camp.volunteersCount += 1;
+        camp.volunteersCount = camp.registeredVolunteers.length;
       }
+      if (this.isMongoConnected) {
+        try {
+          await CampModel.findByIdAndUpdate(camp._id, {
+            registeredVolunteers: camp.registeredVolunteers,
+            volunteersCount: camp.volunteersCount,
+          });
+        } catch (err) {}
+      }
+      try {
+        await prisma.camp.update({
+          where: { id: camp._id },
+          data: {
+            registeredVolunteers: camp.registeredVolunteers,
+            volunteersCount: camp.volunteersCount,
+            updatedAt: new Date(),
+          },
+        });
+      } catch (err) {}
       return camp;
     }
     return null;
