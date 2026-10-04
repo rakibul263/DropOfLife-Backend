@@ -20,10 +20,11 @@ const createBloodRequestZodSchema = z.object({
 
 const updateBloodRequestStatusZodSchema = z.object({
   body: z.object({
-    status: z.enum(['Pending', 'In Progress', 'Fulfilled', 'Cancelled'], {
-      message: 'Valid status is required.',
-    }),
+    status: z
+      .enum(['Pending', 'In Progress', 'Fulfilled', 'Cancelled'])
+      .optional(),
     donorName: z.string().optional(),
+    action: z.enum(['pledge', 'cancel']).optional(),
   }),
 });
 
