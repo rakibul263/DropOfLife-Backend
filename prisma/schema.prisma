@@ -1,0 +1,148 @@
+// Prisma Schema for DropOfLife Blood Donation & Emergency Coordination Platform
+// Database Provider: PostgreSQL (postgrey sql)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// 1. User & Authenticated Entities (Donors, Providers, Admins)
+// -------------------------------------------------------------
+model User {
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  password         String
+  role             String         @default("donor") // "donor" | "provider" | "admin"
+  phone            String?        @default("+8801521711716")
+  bloodGroup       String?        // "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-"
+  isAvailable      Boolean        @default(true)
+  lastDonationDate DateTime?
+  division         String?        @default("Dhaka")
+  district         String?        @default("Dhaka")
+  upazila          String?        @default("Mirpur")
+  organizationName String?
+  licenseNumber    String?
+  isVerified       Boolean        @default(false)
+  totalDonations   Int            @default(0)
+  avatarUrl        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Relationships
+  bloodRequests    BloodRequest[]
+  inventories      Inventory[]
+  camps            Camp[]
+  payments         Payment[]
+
+  @@map("users")
+}
+
+// -------------------------------------------------------------
+// 2. Emergency Blood Transfusion Requests
+// -------------------------------------------------------------
+model BloodRequest {
+  id                 String    @id @default(uuid())
+  requesterId        String?
+  requesterName      String
+  requesterPhone     String?   @default("+8801521711716")
+  patientName        String
+  bloodGroup         String
+  unitsNeeded        Int       @default(1)
+  urgencyLevel       String    @default("Urgent") // "Standard" | "Urgent" | "Critical"
+  hospitalName       String
+  hospitalAddress    String
+  district           String    @default("Dhaka")
+  division           String?   @default("Dhaka")
+  reason             String    @default("Emergency ICU surgery / blood transfusion")
+  contactNumber      String    @default("+8801521711716")
+  requiredDate       DateTime  @default(now())
+  status             String    @default("Pending") // "Pending" | "In Progress" | "Fulfilled" | "Cancelled"
+  matchedDonorsCount Int       @default(0)
+  assignedDonors     String[]  @default([])
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relationships
+  user               User?     @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+
+  @@map("blood_requests")
+}
+
+// -------------------------------------------------------------
+// 3. Hospital & Blood Bank Stock Inventories
+// -------------------------------------------------------------
+model Inventory {
+  id                String   @id @default(uuid())
+  providerId        String
+  providerName      String
+  bloodGroup        String
+  componentType     String   @default("Whole Blood") // "Whole Blood" | "PRBC" | "FFP" | "Platelets"
+  unitsInStock      Int      @default(0)
+  criticalThreshold Int      @default(5)
+  lastUpdated       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relationships
+  provider          User     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("inventories")
+}
+
+// -------------------------------------------------------------
+// 4. Mobile Blood Donation Drives & Awareness Camps
+// -------------------------------------------------------------
+model Camp {
+  id                   String    @id @default(uuid())
+  providerId           String?
+  providerName         String
+  title                String
+  description          String?   @default("")
+  venueAddress         String
+  district             String    @default("Dhaka")
+  division             String    @default("Dhaka")
+  startDate            DateTime
+  endDate              DateTime
+  targetUnits          Int       @default(50)
+  collectedUnits       Int       @default(0)
+  status               String    @default("Upcoming") // "Upcoming" | "Ongoing" | "Completed"
+  contactPhone         String    @default("+8801521711716")
+  volunteersCount      Int       @default(0)
+  registeredVolunteers String[]  @default([])
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relationships
+  provider             User?     @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@map("camps")
+}
+
+// -------------------------------------------------------------
+// 5. Stripe Payments & Lifesaver Supporter Fund Records
+// -------------------------------------------------------------
+model Payment {
+  id                    String   @id @default(uuid())
+  userId                String?
+  userName              String   @default("Lifesaver Supporter")
+  userEmail             String   @default("supporter@dropoflife.org")
+  stripePaymentIntentId String   @unique
+  amount                Int      // In Cents (e.g. 2500 = $25.00)
+  currency              String   @default("usd")
+  paymentPurpose        String   @default("Cold_Chain_Courier")
+  status                String   @default("pending") // "pending" | "succeeded" | "failed"
+  receiptUrl            String?  @default("")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relationships
+  user                  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("payments")
+}
