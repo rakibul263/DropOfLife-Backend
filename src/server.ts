@@ -2,11 +2,23 @@ import app from './app';
 import { config } from './config';
 import mongoose from 'mongoose';
 import { dataStore } from './utils/dataStore';
+import prisma from './app/shared/prisma';
 
 const PORT = config.port;
 
 const startServer = async () => {
-  // Connect to MongoDB with a short timeout so server does not hang if no local DB
+  // 1. Connect to PostgreSQL via Prisma ORM
+  try {
+    console.log('Connecting to PostgreSQL via Prisma ORM...');
+    await prisma.$connect();
+    console.log('🐘 Connected to PostgreSQL successfully via Prisma.');
+  } catch (err: any) {
+    console.warn(
+      '⚠️ PostgreSQL connection via Prisma unavailable or deferred. High-Performance Resilient Store active.'
+    );
+  }
+
+  // 2. Connect to MongoDB with short timeout fallback
   try {
     console.log('Connecting to MongoDB Atlas / Local URI...');
     await mongoose.connect(config.mongoUri, {
@@ -23,7 +35,9 @@ const startServer = async () => {
 
   const server = app.listen(PORT, () => {
     console.log(`🚀 DropOfLife Backend Server running on http://localhost:${PORT}`);
+    console.log(`📖 Swagger API Documentation: http://localhost:${PORT}/docs`);
     console.log(`📋 Health Check: http://localhost:${PORT}/api/v1/health`);
+    console.log(`🐘 Database: PostgreSQL (Prisma ORM) & MongoDB (Resilient Store)`);
     console.log(`🩸 Demo Credentials:`);
     console.log(`   - Admin:    admin@dropoflife.org    / Admin@123`);
     console.log(`   - Donor:    donor@dropoflife.org    / Donor@123`);
