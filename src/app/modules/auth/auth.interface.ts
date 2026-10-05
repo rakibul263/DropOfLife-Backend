@@ -4,7 +4,9 @@ export interface ILoginUser {
 }
 
 export interface ILoginResponse {
+  accessToken: string;
   token: string;
+  refreshToken?: string;
   user: {
     _id?: string;
     id?: string;
@@ -12,6 +14,10 @@ export interface ILoginResponse {
     email: string;
     role: string;
     bloodGroup?: string;
+    gender?: string;
+    hasDonatedBefore?: boolean;
+    totalDonations?: number;
+    lastDonationDate?: Date | string;
     isAvailable?: boolean;
     division?: string;
     district?: string;
@@ -25,6 +31,10 @@ export interface IRegisterUser {
   role: 'donor' | 'provider' | 'admin';
   phone?: string;
   bloodGroup?: string;
+  gender?: 'Male' | 'Female' | 'Other';
+  hasDonatedBefore?: boolean;
+  totalDonations?: number;
+  lastDonationDate?: string;
   division?: string;
   district?: string;
   upazila?: string;

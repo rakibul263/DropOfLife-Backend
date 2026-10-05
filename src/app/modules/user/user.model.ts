@@ -12,6 +12,8 @@ export interface IUserDocument extends Document {
   role: UserRole;
   phone?: string;
   bloodGroup?: BloodGroup;
+  gender?: 'Male' | 'Female' | 'Other';
+  hasDonatedBefore?: boolean;
   isAvailable: boolean;
   lastDonationDate?: Date;
   division?: string;
@@ -34,6 +36,8 @@ const UserSchema = new Schema<IUserDocument>(
     role: { type: String, enum: USER_ROLES, default: 'donor' },
     phone: { type: String, default: '' },
     bloodGroup: { type: String, enum: BLOOD_GROUPS },
+    gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Male' },
+    hasDonatedBefore: { type: Boolean, default: false },
     isAvailable: { type: Boolean, default: true },
     lastDonationDate: { type: Date },
     division: { type: String, default: 'Dhaka' },

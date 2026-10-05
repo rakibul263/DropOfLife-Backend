@@ -14,13 +14,16 @@ build/
 .env.test.local
 .env.production.local
 
-# Logs
+# Logs & Runtime Data
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 *.log
+logs/
+data_*.json
+
 
 # OS & Editor
 .DS_Store

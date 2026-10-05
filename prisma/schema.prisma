@@ -21,6 +21,8 @@ model User {
   role             String         @default("donor") // "donor" | "provider" | "admin"
   phone            String?        @default("+8801521711716")
   bloodGroup       String?        // "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-"
+  gender           String?        @default("Male") // "Male" | "Female" | "Other"
+  hasDonatedBefore Boolean        @default(false)
   isAvailable      Boolean        @default(true)
   lastDonationDate DateTime?
   division         String?        @default("Dhaka")
@@ -29,7 +31,10 @@ model User {
   organizationName String?
   licenseNumber    String?
   isVerified       Boolean        @default(false)
+  isSuspended      Boolean        @default(false)
+  suspendedReason  String?
   totalDonations   Int            @default(0)
+  note             String?
   avatarUrl        String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -145,4 +150,40 @@ model Payment {
   user                  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("payments")
+}
+
+// -------------------------------------------------------------
+// 6. Recipient Reviews & Ratings for Donors
+// -------------------------------------------------------------
+model Review {
+  id              String   @id @default(uuid())
+  donorId         String
+  donorName       String
+  reviewerName    String
+  reviewerContact String?  @default("")
+  rating          Float    @default(5.0)
+  comment         String
+  createdAt       DateTime @default(now())
+
+  @@map("reviews")
+}
+
+// -------------------------------------------------------------
+// 7. Misbehavior Complaints & Platform Issue Reports
+// -------------------------------------------------------------
+model Complaint {
+  id               String   @id @default(uuid())
+  type             String   @default("misbehavior") // "misbehavior" | "website_issue"
+  category         String   @default("General Report")
+  reportedUserId   String?
+  reportedUserName String?
+  reporterName     String
+  reporterContact  String?  @default("")
+  description      String
+  status           String   @default("Pending") // "Pending" | "Investigating" | "Resolved" | "Dismissed"
+  adminNotes       String?  @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("complaints")
 }

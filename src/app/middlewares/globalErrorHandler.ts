@@ -1,5 +1,6 @@
 import { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
+import { logger } from '../utils/logger';
 
 export const globalErrorHandler: ErrorRequestHandler = (
   err,
@@ -22,12 +23,26 @@ export const globalErrorHandler: ErrorRequestHandler = (
     errorMessages = err.errors;
   }
 
+  // Structured Error Logging
+  logger.error(
+    `[${req.method}] ${req.originalUrl} - ${statusCode} - ${message}`,
+    {
+      ip: req.ip || req.socket.remoteAddress,
+      path: req.originalUrl,
+      method: req.method,
+      stack: err.stack,
+    }
+  );
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
   res.status(statusCode).json({
     success: false,
-    message,
+    message: isProduction && statusCode === 500 ? 'Something went wrong on the server' : message,
     errorMessages,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    stack: isProduction ? undefined : err.stack,
   });
 };
 
 export const errorHandler = globalErrorHandler;
+

@@ -11,9 +11,9 @@ DropOfLife connects blood donors, certified healthcare providers, and emergency 
 #### 🔑 Demo Credentials for Testing (1-Click Login):
 | Role | Email | Password | Scope |
 |:---|:---|:---|:---|
-| **Super Admin** | \`admin@dropoflife.org\` | \`Admin@123\` | Platform governance, hospital verifications, system telemetry |
-| **Life Saver Donor** | \`donor@dropoflife.org\` | \`Donor@123\` | Real-time GPS availability switch, request pledges, donor ID |
-| **Hospital / Blood Bank** | \`hospital@dropoflife.org\` | \`Hospital@123\` | 8-group stock telemetry, verified broadcasts, camp drives |
+| **Super Admin** | \`rakibul@dropoflife.com\` | \`admin123\` | Platform governance, hospital verifications, system telemetry |
+| **Life Saver Donor** | \`rakibulhasan@gmail.com\` | \`123456\` | Real-time GPS availability switch, request pledges, donor ID |
+| **Hospital / Blood Bank** | \`hospital@dropoflife.org\` | \`123456\` | 8-group stock telemetry, verified broadcasts, camp drives |
 
 **24/7 National Emergency Hotline:** \`+8801521711716\`
     `,

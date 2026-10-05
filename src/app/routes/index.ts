@@ -14,6 +14,7 @@ const moduleRoutes = [
   { path: '/auth', route: AuthRoutes },
   { path: '/donors', route: DonorRoutes },
   { path: '/requests', route: BloodRequestRoutes },
+  { path: '/blood-requests', route: BloodRequestRoutes },
   { path: '/inventory', route: InventoryRoutes },
   { path: '/camps', route: CampRoutes },
   { path: '/payments', route: PaymentRoutes },
@@ -21,6 +22,38 @@ const moduleRoutes = [
 ];
 
 moduleRoutes.forEach((item) => router.use(item.path, item.route));
+
+// Public / Authenticated Report & Complaint Submission
+router.post('/reports', async (req, res) => {
+  try {
+    const { type, reportedUserId, reportedUserName, reporterName, reporterContact, category, description } = req.body;
+    if (!description || !reporterName) {
+      res.status(400).json({
+        success: false,
+        message: 'Reporter name and complaint description are required.',
+      });
+      return;
+    }
+
+    const report = await dataStore.addComplaint({
+      type: type || 'misbehavior',
+      reportedUserId,
+      reportedUserName,
+      reporterName: reporterName.trim(),
+      reporterContact: reporterContact || '',
+      category: category || 'General Report',
+      description: description.trim(),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'অভিযোগ বা সমস্যা সফলভাবে গ্রহণ করা হয়েছে। অ্যাডমিন টিম দ্রুত যাচাই করবে।',
+      data: { report },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // Public Platform Telemetry & Analytics endpoint
 router.get('/stats', async (req, res) => {

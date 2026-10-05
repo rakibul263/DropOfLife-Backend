@@ -28,14 +28,15 @@ export const auth = (...requiredRoles: string[]) => {
 
       if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.split(' ')[1];
-      } else if (req.cookies && req.cookies.token) {
-        token = req.cookies.token;
+      } else if (req.cookies && (req.cookies.accessToken || req.cookies.token)) {
+        token = req.cookies.accessToken || req.cookies.token;
       }
 
       if (!token) {
         res.status(401).json({
           success: false,
-          message: 'Access Denied: You must be logged in to access this resource.',
+          message: 'Access Denied: You must be logged in with a valid Access Token.',
+          code: 'NO_TOKEN',
         });
         return;
       }
@@ -55,15 +56,20 @@ export const auth = (...requiredRoles: string[]) => {
           message: `Forbidden: Access requires one of [${requiredRoles.join(
             ', '
           )}] permissions. Current role: ${verifiedUser.role}`,
+          code: 'FORBIDDEN',
         });
         return;
       }
 
       next();
     } catch (err: any) {
+      const isExpired = err.name === 'TokenExpiredError';
       res.status(401).json({
         success: false,
-        message: 'Invalid, malformed, or expired JWT authentication token.',
+        message: isExpired
+          ? 'Access token expired. Please refresh your token.'
+          : 'Invalid or malformed authentication token.',
+        code: isExpired ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN',
       });
     }
   };
@@ -81,8 +87,8 @@ export const authOptional = () => {
 
       if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.split(' ')[1];
-      } else if (req.cookies && req.cookies.token) {
-        token = req.cookies.token;
+      } else if (req.cookies && (req.cookies.accessToken || req.cookies.token)) {
+        token = req.cookies.accessToken || req.cookies.token;
       }
 
       if (token) {

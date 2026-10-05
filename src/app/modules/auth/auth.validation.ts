@@ -10,6 +10,10 @@ const registerUserZodSchema = z.object({
     bloodGroup: z
       .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
       .optional(),
+    gender: z.enum(['Male', 'Female', 'Other']).optional(),
+    hasDonatedBefore: z.boolean().optional(),
+    totalDonations: z.number().optional(),
+    lastDonationDate: z.string().optional(),
     division: z.string().optional(),
     district: z.string().optional(),
     upazila: z.string().optional(),

@@ -3,6 +3,7 @@ export interface IDonorFilter {
   division?: string;
   district?: string;
   isAvailable?: boolean;
+  excludeUserId?: string;
 }
 
 export interface IToggleAvailabilityPayload {

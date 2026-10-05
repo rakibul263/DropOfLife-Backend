@@ -8,6 +8,7 @@ export const config = {
   mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/dropoflife',
   jwtSecret: process.env.JWT_SECRET || 'dropoflife_jwt_secret_lifesaver_2026',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'sk_test_mock_stripe_key_demo_2026',
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || 'whsec_mock_demo_secret',
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
+  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
 };

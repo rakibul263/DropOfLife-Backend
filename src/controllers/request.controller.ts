@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { dataStore } from '../utils/dataStore';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { EmailService } from '../app/utils/emailService';
 
 export const getRequests = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -70,6 +71,32 @@ export const createRequest = async (
       contactNumber,
       requiredDate: requiredDate ? new Date(requiredDate) : new Date(),
     });
+
+    // Broadcast emergency alert email via Resend to matching donors
+    if (['Urgent', 'Immediate', 'Critical'].includes(newReq.urgencyLevel)) {
+      const matchingDonors = dataStore.users.filter(
+        (u) =>
+          u.role === 'donor' &&
+          u.isAvailable &&
+          u.bloodGroup === newReq.bloodGroup
+      );
+
+      const recipients = matchingDonors.slice(0, 3);
+      for (const donor of recipients) {
+        if (donor.email) {
+          EmailService.sendEmergencyRequestAlertEmail({
+            recipientEmail: donor.email,
+            donorName: donor.name || 'Valued Donor',
+            patientName: newReq.patientName,
+            hospitalName: newReq.hospitalName,
+            bloodGroup: newReq.bloodGroup,
+            units: newReq.unitsNeeded,
+            location: `${newReq.hospitalAddress || newReq.hospitalName}, ${newReq.district}`,
+            contactPhone: newReq.contactNumber,
+          }).catch((err) => console.warn('Emergency alert email error:', err));
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,

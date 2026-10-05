@@ -6,11 +6,15 @@ export interface IBloodRequestFilter {
   status?: string;
   bloodGroup?: string;
   urgencyLevel?: string;
+  targetDonorId?: string;
+  targetDonorEmail?: string;
+  targetDonorPhone?: string;
 }
 
 export interface ICreateBloodRequestPayload {
   requesterId?: string;
   requesterName?: string;
+  requesterPhone?: string;
   patientName: string;
   bloodGroup: BloodGroup;
   unitsNeeded: number;
@@ -22,4 +26,7 @@ export interface ICreateBloodRequestPayload {
   reason?: string;
   contactNumber: string;
   requiredDate?: Date | string;
+  targetDonorId?: string;
+  targetDonorEmail?: string;
+  targetDonorPhone?: string;
 }

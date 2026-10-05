@@ -15,6 +15,11 @@ const createBloodRequestZodSchema = z.object({
     reason: z.string().optional(),
     contactNumber: z.string().min(11, { message: 'Valid contact phone number is required.' }),
     requiredDate: z.string().or(z.date()).optional(),
+    targetDonorId: z.string().optional(),
+    targetDonorEmail: z.string().optional(),
+    targetDonorPhone: z.string().optional(),
+    requesterName: z.string().optional(),
+    requesterPhone: z.string().optional(),
   }),
 });
 

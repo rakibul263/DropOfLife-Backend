@@ -3,8 +3,10 @@ import { config } from './config';
 import mongoose from 'mongoose';
 import { dataStore } from './utils/dataStore';
 import prisma from './app/shared/prisma';
+import { logger } from './app/utils/logger';
 
-const PORT = config.port;
+
+const PORT = Number(process.env.PORT) || Number(config.port) || 5050;
 
 const startServer = async () => {
   // 1. Connect to PostgreSQL via Prisma ORM
@@ -12,6 +14,7 @@ const startServer = async () => {
     console.log('Connecting to PostgreSQL via Prisma ORM...');
     await prisma.$connect();
     console.log('🐘 Connected to PostgreSQL successfully via Prisma.');
+    await dataStore.syncWithPrisma();
   } catch (err: any) {
     console.warn(
       '⚠️ PostgreSQL connection via Prisma unavailable or deferred. High-Performance Resilient Store active.'
@@ -33,18 +36,53 @@ const startServer = async () => {
     dataStore.setMongoConnected(false);
   }
 
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`🚀 DropOfLife Backend Server running on port ${PORT}`);
+    logger.info(`📖 Swagger API Documentation: http://localhost:${PORT}/docs`);
+    logger.info(`📋 Health Check: http://localhost:${PORT}/api/v1/health`);
     console.log(`🚀 DropOfLife Backend Server running on http://localhost:${PORT}`);
     console.log(`📖 Swagger API Documentation: http://localhost:${PORT}/docs`);
     console.log(`📋 Health Check: http://localhost:${PORT}/api/v1/health`);
     console.log(`🐘 Database: PostgreSQL (Prisma ORM) & MongoDB (Resilient Store)`);
-    console.log(`🩸 Demo Credentials:`);
-    console.log(`   - Admin:    admin@dropoflife.org    / Admin@123`);
-    console.log(`   - Donor:    donor@dropoflife.org    / Donor@123`);
-    console.log(`   - Hospital: hospital@dropoflife.org / Hospital@123`);
+  });
+
+  // Graceful Shutdown for Cloud Deployments (Docker, Render, Railway, K8s)
+  const gracefulShutdown = async (signal: string) => {
+    logger.warn(`Received ${signal}. Gracefully closing HTTP server and database connections...`);
+    server.close(async () => {
+      logger.info('HTTP server closed.');
+      try {
+        await prisma.$disconnect();
+        logger.info('Prisma disconnected.');
+      } catch (e) {}
+      try {
+        await mongoose.connection.close();
+        logger.info('Mongoose disconnected.');
+      } catch (e) {}
+      process.exit(0);
+    });
+
+    // Force exit if shutdown takes too long
+    setTimeout(() => {
+      logger.error('Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  process.on('unhandledRejection', (reason: any) => {
+    logger.error('Unhandled Promise Rejection:', { reason: reason?.stack || reason });
+  });
+
+  process.on('uncaughtException', (error: Error) => {
+    logger.error('Uncaught Exception thrown:', { error: error.stack || error.message });
+    process.exit(1);
   });
 
   return server;
 };
 
 startServer();
+

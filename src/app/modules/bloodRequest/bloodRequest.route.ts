@@ -6,7 +6,7 @@ import { BloodRequestValidation } from './bloodRequest.validation';
 
 const router = Router();
 
-router.get('/', BloodRequestController.getRequests);
+router.get('/', authOptional(), BloodRequestController.getRequests);
 
 router.post(
   '/',

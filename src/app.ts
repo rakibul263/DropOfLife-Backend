@@ -2,24 +2,52 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerDocument } from './app/config/swagger';
+import { config } from './app/config';
 import routes from './app/routes';
 import { globalErrorHandler } from './app/middlewares/globalErrorHandler';
 import { arcjetMiddleware } from './app/middlewares/arcjetMiddleware';
+import { requestLogger } from './app/middlewares/requestLogger';
+import { generalApiLimiter } from './app/middlewares/rateLimiter';
 
 const app = express();
+
+const isProduction = config.nodeEnv === 'production';
+
+// Robust CORS Whitelist: Supports configured client URLs, Vercel deployments, and localhost
+const allowedOrigins = [
+  ...config.allowedOrigins,
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5050',
+];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow all origins in development or matching localhost/production domain
-      callback(null, true);
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const isExplicitlyAllowed = allowedOrigins.includes(origin);
+      const isVercelPreview = /^https:\/\/([a-zA-Z0-9_-]+\.)?vercel\.app$/.test(origin);
+
+      if (isExplicitlyAllowed || isVercelPreview || !isProduction) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS policy blocked access from origin: ${origin}`));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   })
 );
 
+// HTTP Request Logger for performance monitoring and analytics
+app.use(requestLogger);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 
 // Lightweight cookie parsing middleware for JWT session management
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -79,6 +107,9 @@ app.get('/', (req: Request, res: Response) => {
 
 // Arcjet Security Middleware: Rate Limiting & Bot/WAF Protection
 app.use(arcjetMiddleware);
+
+// General public API Rate Limiter
+app.use('/api', generalApiLimiter);
 
 // API version 1 with Modular MVC routing
 app.use('/api/v1', routes);
