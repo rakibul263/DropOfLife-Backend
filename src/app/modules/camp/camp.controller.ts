@@ -68,7 +68,14 @@ const createCamp = catchAsync(
 const registerCampVolunteer = catchAsync(
   async (req: CustomAuthRequest, res: Response): Promise<void> => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const volunteerName = req.user ? req.user.name : req.body.name || 'Volunteer Supporter';
+    if (!req.user && !req.body.name) {
+      res.status(401).json({
+        success: false,
+        message: 'Access Denied: You must be logged in to register as a volunteer.',
+      });
+      return;
+    }
+    const volunteerName = req.user ? req.user.name : req.body.name;
 
     const camp = await CampService.registerCampVolunteer(id, volunteerName);
 

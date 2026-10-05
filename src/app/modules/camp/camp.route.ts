@@ -6,6 +6,7 @@ const router = Router();
 
 router.get('/', CampController.getCamps);
 router.post('/', auth('provider', 'admin'), CampController.createCamp);
-router.post('/:id/register', CampController.registerCampVolunteer);
+router.post('/:id/register', auth('donor', 'provider', 'admin'), CampController.registerCampVolunteer);
+router.post('/:id/volunteer', auth('donor', 'provider', 'admin'), CampController.registerCampVolunteer);
 
 export const CampRoutes = router;
