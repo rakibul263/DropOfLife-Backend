@@ -21,7 +21,7 @@ const PaymentSchema = new Schema<IPaymentDocument>(
     userEmail: { type: String, default: '' },
     stripePaymentIntentId: { type: String, required: true },
     amount: { type: Number, required: true },
-    currency: { type: String, default: 'usd' },
+    currency: { type: String, default: 'bdt' },
     paymentPurpose: {
       type: String,
       default: 'Lifesaver_Supporter_Fund',

@@ -6,7 +6,7 @@ import { CustomAuthRequest } from '../../middlewares/auth';
 
 const createPaymentIntent = catchAsync(
   async (req: CustomAuthRequest, res: Response): Promise<void> => {
-    const { amount = 2500, currency = 'usd', purpose = 'Lifesaver_Supporter_Fund' } = req.body;
+    const { amount = 1000, currency = 'bdt', purpose = 'Lifesaver_Supporter_Fund' } = req.body;
 
     const result = await PaymentService.createPaymentIntent(
       amount,

@@ -20,7 +20,7 @@ export const createPaymentIntent = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { amount = 2500, currency = 'usd', purpose = 'Lifesaver_Supporter_Fund' } = req.body;
+    const { amount = 1000, currency = 'bdt', purpose = 'Lifesaver_Supporter_Fund' } = req.body;
 
     // If Stripe client is initialized with valid live/test key, use official SDK:
     if (stripeClient) {
@@ -83,7 +83,7 @@ export const confirmPayment = async (
       userEmail: req.user?.email || 'supporter@dropoflife.org',
       stripePaymentIntentId: paymentIntentId || `pi_simulated_${Date.now()}`,
       amount: Number(amount),
-      currency: 'usd',
+      currency: 'bdt',
       paymentPurpose: purpose,
       status: 'succeeded',
       receiptUrl: `https://pay.stripe.com/receipts/test_${Date.now()}`,

@@ -15,7 +15,7 @@ try {
 
 const createPaymentIntent = async (
   amount: number,
-  currency = 'usd',
+  currency = 'bdt',
   purpose = 'Lifesaver_Supporter_Fund',
   user?: { id?: string; name?: string; email?: string }
 ) => {
@@ -72,7 +72,7 @@ const confirmPayment = async (
     userEmail: user?.email || 'supporter@dropoflife.org',
     stripePaymentIntentId: paymentIntentId || `pi_simulated_${Date.now()}`,
     amount: Number(amount),
-    currency: 'usd',
+    currency: 'bdt',
     paymentPurpose: purpose,
     status: 'succeeded',
     receiptUrl: `https://pay.stripe.com/receipts/test_${Date.now()}`,
