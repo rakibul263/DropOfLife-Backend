@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { dataStore } from '../utils/dataStore';
 import { AuthRoutes } from '../modules/auth/auth.route';
 import { DonorRoutes } from '../modules/donor/donor.route';
 import { BloodRequestRoutes } from '../modules/bloodRequest/bloodRequest.route';
@@ -21,6 +22,20 @@ const moduleRoutes = [
 
 moduleRoutes.forEach((item) => router.use(item.path, item.route));
 
+// Public Platform Telemetry & Analytics endpoint
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await dataStore.getPlatformAnalytics();
+    res.status(200).json({
+      success: true,
+      message: 'Platform telemetry fetched successfully from database',
+      data: { stats },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Health check endpoint
 router.get('/health', (req, res) => {
   res.status(200).json({
@@ -29,6 +44,7 @@ router.get('/health', (req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     hotline: '+8801521711716',
+    landline: '02-9351969',
   });
 });
 

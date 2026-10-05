@@ -1,4 +1,5 @@
 import { ErrorRequestHandler } from 'express';
+import { ZodError } from 'zod';
 
 export const globalErrorHandler: ErrorRequestHandler = (
   err,
@@ -6,15 +7,25 @@ export const globalErrorHandler: ErrorRequestHandler = (
   res,
   next
 ): void => {
-  console.error('Unhandled API Error:', err);
+  let statusCode = err.statusCode || err.status || 500;
+  let message = err.message || 'Internal Server Error';
+  let errorMessages = [{ path: '', message }];
 
-  const statusCode = err.statusCode || err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  if (err instanceof ZodError) {
+    statusCode = 400;
+    message = 'Validation Error';
+    errorMessages = err.issues.map((issue) => ({
+      path: issue.path[issue.path.length - 1]?.toString() || '',
+      message: issue.message,
+    }));
+  } else if (err?.errors) {
+    errorMessages = err.errors;
+  }
 
   res.status(statusCode).json({
     success: false,
     message,
-    errorMessages: err.errors || [{ path: '', message }],
+    errorMessages,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };

@@ -4,6 +4,7 @@ import { dataStore } from '../../utils/dataStore';
 import { jwtHelpers } from '../../utils/jwtHelpers';
 import { config } from '../../config';
 import { ILoginUser, IRegisterUser } from './auth.interface';
+import { EmailService } from '../../utils/emailService';
 
 const registerUser = async (payload: IRegisterUser) => {
   const existingUser = await dataStore.findUserByEmail(payload.email);
@@ -55,6 +56,24 @@ const registerUser = async (payload: IRegisterUser) => {
   );
 
   const { password: _, ...safeUser } = newUser;
+
+  // Trigger automated email notifications via Resend (Welcome + Donor notification)
+  EmailService.sendWelcomeEmail({
+    name: newUser.name,
+    email: newUser.email,
+    role: newUser.role,
+    bloodGroup: newUser.bloodGroup,
+  }).catch((err) => console.warn('Welcome email error:', err));
+
+  if (newUser.role === 'donor') {
+    EmailService.sendDonorConfirmationEmail({
+      name: newUser.name,
+      email: newUser.email,
+      bloodGroup: newUser.bloodGroup || 'O+',
+      district: newUser.district || 'Dhaka',
+    }).catch((err) => console.warn('Donor email error:', err));
+  }
+
   return { token, refreshToken, user: safeUser };
 };
 
