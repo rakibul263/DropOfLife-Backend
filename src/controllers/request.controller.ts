@@ -87,9 +87,14 @@ export const updateRequestStatus = async (
 ): Promise<void> => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const { status, donorName } = req.body;
+    const { status, donorName, action } = req.body;
 
-    const updated = await dataStore.updateRequestStatus(id, status, donorName);
+    const updated = await dataStore.updateRequestStatus(
+      id,
+      status,
+      donorName,
+      action
+    );
     if (!updated) {
       res.status(404).json({ success: false, message: 'Request not found' });
       return;
@@ -97,7 +102,10 @@ export const updateRequestStatus = async (
 
     res.status(200).json({
       success: true,
-      message: `Request status updated to ${status}`,
+      message:
+        action === 'cancel'
+          ? 'Pledge cancelled successfully'
+          : `Request status updated to ${updated.status}`,
       data: { request: updated },
     });
   } catch (err: any) {
