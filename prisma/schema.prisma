@@ -19,7 +19,7 @@ model User {
   email            String         @unique
   password         String
   role             String         @default("donor") // "donor" | "provider" | "admin"
-  phone            String?        @default("+8801521711716")
+  phone            String?
   bloodGroup       String?        // "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-"
   gender           String?        @default("Male") // "Male" | "Female" | "Other"
   hasDonatedBefore Boolean        @default(false)

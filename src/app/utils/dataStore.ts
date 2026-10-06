@@ -289,23 +289,85 @@ class ResilientDataStore {
 
   // --- User operations ---
   async findUserByEmail(email: string) {
-    const memUser = this.users.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase()
-    );
+    if (!email) return null;
+    const normalizedEmail = email.toLowerCase().trim();
+
     try {
       const doc = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
+        where: { email: normalizedEmail },
       });
-      if (doc) return { ...doc, _id: doc.id, ...(memUser || {}) };
+      if (doc) {
+        const docUser = { ...doc, _id: doc.id, id: doc.id };
+        const memIdx = this.users.findIndex(
+          (u) => u.email?.toLowerCase() === normalizedEmail
+        );
+        if (memIdx !== -1) {
+          this.users[memIdx] = { ...this.users[memIdx], ...docUser };
+        } else {
+          this.users.push(docUser);
+        }
+        return docUser;
+      }
     } catch (err) {}
 
+    const memUser = this.users.find(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
     if (this.isMongoConnected) {
       try {
-        const doc = await UserModel.findOne({ email: email.toLowerCase() });
-        if (doc) return { ...doc.toObject(), ...(memUser || {}) };
+        const doc = await UserModel.findOne({ email: normalizedEmail });
+        if (doc) return { ...doc.toObject(), _id: doc._id.toString(), ...(memUser || {}) };
       } catch (err) {}
     }
-    return memUser;
+    return memUser || null;
+  }
+
+  async findUserByPhone(phone: string, excludeUserId?: string) {
+    if (!phone) return null;
+    const phoneKey = phone.replace(/\D/g, '').slice(-10);
+    if (!phoneKey || phoneKey.length < 10) return null;
+
+    const strExclude = excludeUserId ? excludeUserId.toString() : null;
+
+    // 1. Check in PostgreSQL database
+    try {
+      const allDbUsers = await prisma.user.findMany({
+        where: {
+          phone: { not: null },
+          ...(strExclude ? { id: { not: strExclude } } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          name: true,
+          role: true,
+          bloodGroup: true,
+        },
+      });
+
+      const matchedDb = allDbUsers.find((u) => {
+        if (!u.phone) return false;
+        const uKey = u.phone.replace(/\D/g, '').slice(-10);
+        return uKey === phoneKey;
+      });
+
+      if (matchedDb) {
+        return { ...matchedDb, _id: matchedDb.id };
+      }
+    } catch (err) {}
+
+    // 2. Check in memory users
+    const matchedMem = this.users.find((u) => {
+      if (strExclude && (u._id?.toString() === strExclude || u.id?.toString() === strExclude)) {
+        return false;
+      }
+      if (!u.phone) return false;
+      const uKey = u.phone.replace(/\D/g, '').slice(-10);
+      return uKey === phoneKey;
+    });
+
+    return matchedMem || null;
   }
 
   async findUserById(id: string) {
@@ -348,8 +410,8 @@ class ResilientDataStore {
           email: newDoc.email.toLowerCase(),
           password: newDoc.password,
           role: newDoc.role || 'donor',
-          phone: newDoc.phone,
-          bloodGroup: newDoc.bloodGroup,
+          phone: newDoc.phone || null,
+          bloodGroup: newDoc.bloodGroup || null,
           gender: newDoc.gender || 'Male',
           hasDonatedBefore: Boolean(newDoc.hasDonatedBefore),
           isAvailable: newDoc.isAvailable !== false,
@@ -359,10 +421,19 @@ class ResilientDataStore {
           upazila: newDoc.upazila || 'Mirpur',
           note: newDoc.note || null,
           totalDonations: Number(newDoc.totalDonations) || 0,
+          avatarUrl: newDoc.avatarUrl || null,
+          organizationName: newDoc.organizationName || null,
+          licenseNumber: newDoc.licenseNumber || null,
+          isVerified: Boolean(newDoc.isVerified),
         },
       });
-      if (pDoc) newDoc._id = pDoc.id;
-    } catch (err) {}
+      if (pDoc) {
+        newDoc._id = pDoc.id;
+        newDoc.id = pDoc.id;
+      }
+    } catch (err: any) {
+      console.warn('Prisma createUser warning:', err?.message || err);
+    }
 
     if (this.isMongoConnected) {
       try {
@@ -385,7 +456,7 @@ class ResilientDataStore {
           where: { id: strId },
         });
         if (doc) {
-          this.users.push({ ...doc, _id: doc.id });
+          this.users.push({ ...doc, _id: doc.id, id: doc.id });
           idx = this.users.length - 1;
         }
       } catch (err) {}
@@ -402,6 +473,7 @@ class ResilientDataStore {
       resetExpires,
       lastRequestedAt,
       _id,
+      id: _ignoredId,
       ...prismaSafeUpdates
     } = updates;
 
@@ -412,7 +484,14 @@ class ResilientDataStore {
           data: prismaSafeUpdates,
         });
       } catch (err: any) {
-        console.warn(`Prisma user update warning for ${strId}:`, err?.message || err);
+        if (idx !== -1 && this.users[idx]?.email) {
+          try {
+            await prisma.user.update({
+              where: { email: this.users[idx].email.toLowerCase() },
+              data: prismaSafeUpdates,
+            });
+          } catch (e2) {}
+        }
       }
     }
 

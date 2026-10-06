@@ -42,6 +42,17 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (phone && phone.trim().length >= 10) {
+      const existingPhone = await dataStore.findUserByPhone(phone);
+      if (existingPhone) {
+        res.status(409).json({
+          success: false,
+          message: 'A user with this phone number already exists.',
+        });
+        return;
+      }
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -251,9 +262,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
         user = await dataStore.updateUser(user._id, updates);
       }
 
-      const isProfileComplete = Boolean(
-        user.phone && (user.role !== 'donor' || user.bloodGroup)
-      );
+      const isProfileComplete = true;
 
       const token = jwt.sign(
         {
@@ -311,7 +320,19 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Step 2 details provided -> create user
+    // Step 2 details provided -> check phone uniqueness
+    if (phone) {
+      const existingPhone = await dataStore.findUserByPhone(phone);
+      if (existingPhone) {
+        res.status(409).json({
+          success: false,
+          message: 'A user with this phone number already exists.',
+        });
+        return;
+      }
+    }
+
+    // Create user
     const salt = await bcrypt.genSalt(10);
     const randomPassword = await bcrypt.hash(`GoogleOAuth2_${Date.now()}_${Math.random()}`, salt);
 

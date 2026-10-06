@@ -22,6 +22,18 @@ const register = catchAsync(async (req: Request, res: Response): Promise<void> =
     ...cookieOptions,
     maxAge: 24 * 60 * 60 * 1000,
   });
+  res.cookie('dropoflife_token', result.accessToken, {
+    ...cookieOptions,
+    httpOnly: false,
+    maxAge: 24 * 60 * 60 * 1000,
+  });
+  if (result.user?.role) {
+    res.cookie('dropoflife_role', result.user.role, {
+      ...cookieOptions,
+      httpOnly: false,
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+  }
 
   // 30-day Refresh Token cookie
   if (result.refreshToken) {
@@ -57,6 +69,18 @@ const login = catchAsync(async (req: Request, res: Response): Promise<void> => {
     ...cookieOptions,
     maxAge: 24 * 60 * 60 * 1000,
   });
+  res.cookie('dropoflife_token', result.accessToken, {
+    ...cookieOptions,
+    httpOnly: false,
+    maxAge: 24 * 60 * 60 * 1000,
+  });
+  if (result.user?.role) {
+    res.cookie('dropoflife_role', result.user.role, {
+      ...cookieOptions,
+      httpOnly: false,
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+  }
 
   // 30-day Refresh Token cookie
   if (result.refreshToken) {
@@ -160,6 +184,18 @@ const googleAuth = catchAsync(async (req: Request, res: Response): Promise<void>
       ...cookieOptions,
       maxAge: 24 * 60 * 60 * 1000,
     });
+    res.cookie('dropoflife_token', result.accessToken, {
+      ...cookieOptions,
+      httpOnly: false,
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    if (result.user?.role) {
+      res.cookie('dropoflife_role', result.user.role, {
+        ...cookieOptions,
+        httpOnly: false,
+        maxAge: 24 * 60 * 60 * 1000,
+      });
+    }
   }
 
   if (result.refreshToken) {

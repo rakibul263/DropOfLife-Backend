@@ -5,11 +5,20 @@ import { jwtHelpers } from '../../utils/jwtHelpers';
 import { config } from '../../config';
 import { ILoginUser, IRegisterUser } from './auth.interface';
 import { EmailService } from '../../utils/emailService';
+import ApiError from '../../errors/ApiError';
 
 const registerUser = async (payload: IRegisterUser) => {
-  const existingUser = await dataStore.findUserByEmail(payload.email);
+  const normalizedEmail = (payload.email || '').toLowerCase().trim();
+  const existingUser = await dataStore.findUserByEmail(normalizedEmail);
   if (existingUser) {
-    throw new Error('A user with this email address already exists.');
+    throw new ApiError(400, 'A user with this email address already exists. Please login instead.');
+  }
+
+  if (payload.phone && payload.phone.trim().length >= 10) {
+    const existingPhoneUser = await dataStore.findUserByPhone(payload.phone);
+    if (existingPhoneUser) {
+      throw new ApiError(400, 'A user with this phone number already exists. Please use a unique phone number.');
+    }
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -21,10 +30,10 @@ const registerUser = async (payload: IRegisterUser) => {
 
   const newUser = await dataStore.createUser({
     name: payload.name,
-    email: payload.email.toLowerCase(),
+    email: normalizedEmail,
     password: hashedPassword,
     role: payload.role || 'donor',
-    phone: payload.phone || '+8801521711716',
+    phone: payload.phone ? payload.phone.trim() : undefined,
     bloodGroup: isDonor ? payload.bloodGroup || 'O+' : undefined,
     gender: payload.gender || 'Male',
     hasDonatedBefore: donatedBefore,
@@ -186,7 +195,8 @@ const googleAuthUser = async (payload: {
 
   if (user) {
     if (user.isSuspended) {
-      throw new Error(
+      throw new ApiError(
+        403,
         user.suspendedReason
           ? `Account Suspended: ${user.suspendedReason}`
           : 'Your account has been suspended by administration due to community guidelines violation.'
@@ -194,7 +204,13 @@ const googleAuthUser = async (payload: {
     }
 
     const updates: any = {};
-    if (payload.phone && (!user.phone || user.phone === '')) updates.phone = payload.phone;
+    if (payload.phone && (!user.phone || user.phone.trim() === '')) {
+      const existingPhoneUser = await dataStore.findUserByPhone(payload.phone, user.id || user._id);
+      if (existingPhoneUser) {
+        throw new ApiError(400, 'This phone number is already registered to another account.');
+      }
+      updates.phone = payload.phone.trim();
+    }
     if (payload.bloodGroup && !user.bloodGroup) updates.bloodGroup = payload.bloodGroup;
     if (payload.avatarUrl && (!user.avatarUrl || user.avatarUrl.includes('dicebear'))) updates.avatarUrl = payload.avatarUrl;
     if (payload.division && !user.division) updates.division = payload.division;
@@ -202,15 +218,11 @@ const googleAuthUser = async (payload: {
     if (payload.gender && !user.gender) updates.gender = payload.gender;
 
     if (Object.keys(updates).length > 0) {
-      user = await dataStore.updateUser(user._id, updates);
+      user = await dataStore.updateUser(user.id || user._id, updates);
     }
 
-    const isProfileComplete = Boolean(
-      user.phone && user.phone.length >= 10 && (user.role !== 'donor' || user.bloodGroup)
-    );
-
     const accessToken = jwtHelpers.createAccessToken({
-      id: user._id,
+      id: user._id || user.id,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -218,7 +230,7 @@ const googleAuthUser = async (payload: {
     });
 
     const refreshToken = jwtHelpers.createRefreshToken({
-      id: user._id,
+      id: user._id || user.id,
       email: user.email,
       role: user.role,
     });
@@ -230,13 +242,14 @@ const googleAuthUser = async (payload: {
       refreshToken,
       user: safeUser,
       isNewUser: false,
-      isProfileComplete,
+      isProfileComplete: true, // Existing registered user is ALWAYS complete, no step 2 needed!
     };
   }
 
+  // --- BRAND NEW GOOGLE USER REGISTRATION ---
   const role = payload.role || 'donor';
   const hasRequiredDetails = Boolean(
-    payload.phone && payload.phone.length >= 10 && (role !== 'donor' || payload.bloodGroup)
+    payload.phone && payload.phone.trim().length >= 10
   );
 
   if (!hasRequiredDetails) {
@@ -255,6 +268,12 @@ const googleAuthUser = async (payload: {
     };
   }
 
+  // Check phone uniqueness before creating new account with Google
+  const existingPhoneUser = await dataStore.findUserByPhone(payload.phone!);
+  if (existingPhoneUser) {
+    throw new ApiError(400, 'A user with this phone number already exists. Please use a unique phone number.');
+  }
+
   const salt = await bcrypt.genSalt(10);
   const randomPassword = await bcrypt.hash(`GoogleOAuth2_${Date.now()}_${Math.random()}`, salt);
 
@@ -263,7 +282,7 @@ const googleAuthUser = async (payload: {
     email: normalizedEmail,
     password: randomPassword,
     role,
-    phone: payload.phone,
+    phone: payload.phone!.trim(),
     bloodGroup: payload.bloodGroup || 'O+',
     gender: payload.gender || 'Male',
     hasDonatedBefore: false,
@@ -278,7 +297,7 @@ const googleAuthUser = async (payload: {
   });
 
   const accessToken = jwtHelpers.createAccessToken({
-    id: newUser._id,
+    id: newUser._id || newUser.id,
     email: newUser.email,
     role: newUser.role,
     name: newUser.name,
@@ -286,7 +305,7 @@ const googleAuthUser = async (payload: {
   });
 
   const refreshToken = jwtHelpers.createRefreshToken({
-    id: newUser._id,
+    id: newUser._id || newUser.id,
     email: newUser.email,
     role: newUser.role,
   });
@@ -305,7 +324,7 @@ const googleAuthUser = async (payload: {
     token: accessToken,
     refreshToken,
     user: safeUser,
-    isNewUser: true,
+    isNewUser: false,
     isProfileComplete: true,
   };
 };
