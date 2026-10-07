@@ -157,6 +157,8 @@ const logout = catchAsync(async (req: Request, res: Response): Promise<void> => 
   res.clearCookie('accessToken');
   res.clearCookie('token');
   res.clearCookie('refreshToken');
+  res.clearCookie('dropoflife_token');
+  res.clearCookie('dropoflife_role');
 
   sendResponse(res, {
     statusCode: 200,
