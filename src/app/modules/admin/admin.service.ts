@@ -1,6 +1,7 @@
 import { dataStore } from '../../utils/dataStore';
 import bcrypt from 'bcryptjs';
 import { EmailService } from '../../utils/emailService';
+import prisma from '../../shared/prisma';
 
 const getPlatformAnalytics = async () => {
   const stats = await dataStore.getPlatformAnalytics();
@@ -8,6 +9,23 @@ const getPlatformAnalytics = async () => {
 };
 
 const getAllUsers = async (role?: string) => {
+  try {
+    const where: any = role ? { role } : {};
+    const dbUsers = await prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    if (dbUsers && dbUsers.length > 0) {
+      const safeUsers = dbUsers.map(({ password: _, ...u }) => ({ ...u, _id: u.id }));
+      return {
+        total: safeUsers.length,
+        users: safeUsers,
+      };
+    }
+  } catch (err: any) {
+    console.warn('Prisma getAllUsers fallback:', err?.message || err);
+  }
+
   let users = [...dataStore.users];
   if (role) {
     users = users.filter((u) => u.role === role);
@@ -83,6 +101,22 @@ const getPayments = async () => {
 };
 
 const getProviders = async () => {
+  try {
+    const dbProviders = await prisma.user.findMany({
+      where: { role: 'provider' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (dbProviders && dbProviders.length > 0) {
+      const safeProviders = dbProviders.map(({ password: _, ...u }) => ({ ...u, _id: u.id }));
+      return {
+        total: safeProviders.length,
+        providers: safeProviders,
+      };
+    }
+  } catch (err: any) {
+    console.warn('Prisma getProviders fallback:', err?.message || err);
+  }
+
   const providers = dataStore.users.filter((u) => u.role === 'provider');
   const safeProviders = providers.map(({ password: _, ...u }) => u);
   return {

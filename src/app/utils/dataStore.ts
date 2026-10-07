@@ -254,7 +254,42 @@ class ResilientDataStore {
         console.log(`🐘 Loaded ${this.users.length} users into DataStore from Neon PostgreSQL (Prisma).`);
       }
 
-      const dbReviews = await prisma.review.findMany();
+      const dbRequests = await prisma.bloodRequest.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      if (dbRequests && dbRequests.length > 0) {
+        this.requests = dbRequests.map((r) => ({
+          ...r,
+          _id: r.id,
+        }));
+        console.log(`🩸 Loaded ${this.requests.length} blood requests from Neon PostgreSQL.`);
+      }
+
+      const dbCamps = await prisma.camp.findMany({
+        orderBy: { startDate: 'asc' },
+      });
+      if (dbCamps && dbCamps.length > 0) {
+        this.camps = dbCamps.map((c) => ({
+          ...c,
+          _id: c.id,
+        }));
+        console.log(`🏕️ Loaded ${this.camps.length} blood camps from Neon PostgreSQL.`);
+      }
+
+      const dbInvs = await prisma.inventory.findMany({
+        orderBy: { bloodGroup: 'asc' },
+      });
+      if (dbInvs && dbInvs.length > 0) {
+        this.inventories = dbInvs.map((i) => ({
+          ...i,
+          _id: i.id,
+        }));
+        console.log(`📦 Loaded ${this.inventories.length} inventory records from Neon PostgreSQL.`);
+      }
+
+      const dbReviews = await prisma.review.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
       if (dbReviews && dbReviews.length > 0) {
         this.reviews = dbReviews.map((r) => ({
           ...r,
@@ -262,7 +297,9 @@ class ResilientDataStore {
         }));
       }
 
-      const dbComplaints = await prisma.complaint.findMany();
+      const dbComplaints = await prisma.complaint.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
       if (dbComplaints && dbComplaints.length > 0) {
         this.complaints = dbComplaints.map((c) => ({
           ...c,
@@ -274,12 +311,10 @@ class ResilientDataStore {
         orderBy: { createdAt: 'desc' },
       });
       if (dbPayments && dbPayments.length > 0) {
-        const existingIntentIds = new Set(this.payments.map((p) => p.stripePaymentIntentId || p.id));
-        for (const dp of dbPayments) {
-          if (!existingIntentIds.has(dp.stripePaymentIntentId || dp.id)) {
-            this.payments.unshift(dp);
-          }
-        }
+        this.payments = dbPayments.map((p) => ({
+          ...p,
+          _id: p.id,
+        }));
         console.log(`💳 Synced ${dbPayments.length} financial transactions from Neon PostgreSQL into DataStore.`);
       }
     } catch (err: any) {
@@ -524,13 +559,6 @@ class ResilientDataStore {
     return deleted;
   }
 
-  async getPayments() {
-    // Ultra-fast zero-latency response (<2ms) from memory cache
-    return [...this.payments].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }
-
   // --- Donors queries ---
   async getDonors(filters: {
     bloodGroup?: string;
@@ -679,98 +707,106 @@ class ResilientDataStore {
     targetDonorEmail?: string;
     targetDonorPhone?: string;
   }) {
-    let result = [...this.requests];
-    if (filters.status) {
-      result = result.filter((r) => r.status === filters.status);
+    try {
+      const where: any = {};
+      if (filters.status && filters.status !== 'ALL') {
+        where.status = { equals: filters.status, mode: 'insensitive' };
+      }
+      if (filters.bloodGroup && filters.bloodGroup !== 'ALL') {
+        where.bloodGroup = { equals: filters.bloodGroup, mode: 'insensitive' };
+      }
+      if (filters.urgencyLevel && filters.urgencyLevel !== 'ALL') {
+        where.urgencyLevel = { equals: filters.urgencyLevel, mode: 'insensitive' };
+      }
+
+      const dbRequests = await prisma.bloodRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (dbRequests && dbRequests.length > 0) {
+        let result = dbRequests.map((r) => ({
+          ...r,
+          _id: r.id,
+        }));
+
+        if (filters.targetDonorId || filters.targetDonorEmail || filters.targetDonorPhone) {
+          const qId = (filters.targetDonorId || '').toString().trim().toLowerCase();
+          const qEmail = (filters.targetDonorEmail || '').toString().trim().toLowerCase();
+          const qPhone = (filters.targetDonorPhone || '').replace(/\D/g, '');
+
+          result = result.filter((r: any) => {
+            const rId = (r.targetDonorId || '').toString().toLowerCase();
+            const rEmail = (r.targetDonorEmail || '').toLowerCase();
+            const rPhone = (r.contactNumber || '').replace(/\D/g, '');
+            if (qId && rId === qId) return true;
+            if (qEmail && rEmail === qEmail) return true;
+            if (qPhone && rPhone && (rPhone === qPhone || rPhone.endsWith(qPhone))) return true;
+            return false;
+          });
+        }
+
+        return result;
+      }
+    } catch (err: any) {
+      console.warn('Prisma getRequests query fallback:', err?.message || err);
     }
-    if (filters.bloodGroup) {
+
+    let result = [...this.requests];
+    if (filters.status && filters.status !== 'ALL') {
+      result = result.filter((r) => r.status?.toLowerCase() === filters.status?.toLowerCase());
+    }
+    if (filters.bloodGroup && filters.bloodGroup !== 'ALL') {
       result = result.filter((r) => r.bloodGroup === filters.bloodGroup);
     }
-    if (filters.urgencyLevel) {
+    if (filters.urgencyLevel && filters.urgencyLevel !== 'ALL') {
       result = result.filter((r) => r.urgencyLevel === filters.urgencyLevel);
     }
-    if (filters.targetDonorId || filters.targetDonorEmail || filters.targetDonorPhone) {
-      const qId = (filters.targetDonorId || '').toString().trim().toLowerCase();
-      const qEmail = (filters.targetDonorEmail || '').toString().trim().toLowerCase();
-      const qPhone = (filters.targetDonorPhone || '').replace(/\D/g, '');
-
-      // Identify corresponding donor user from this.users
-      let matchingUser = this.users.find((u) => {
-        const uId = (u._id || u.id || '').toString().toLowerCase();
-        const uEmail = (u.email || '').toLowerCase();
-        const uPhone = (u.phone || '').replace(/\D/g, '');
-        return (
-          (qId && (uId === qId || uEmail === qId)) ||
-          (qEmail && (uEmail === qEmail || uId === qEmail)) ||
-          (qPhone && uPhone && (uPhone === qPhone || uPhone.endsWith(qPhone) || qPhone.endsWith(uPhone)))
-        );
-      });
-
-      if (!matchingUser && (qEmail || qId)) {
-        try {
-          const pUser = await prisma.user.findFirst({
-            where: {
-              OR: [
-                ...(qEmail ? [{ email: { equals: qEmail, mode: 'insensitive' as const } }] : []),
-                ...(qId ? [{ id: qId }] : []),
-              ],
-            },
-          });
-          if (pUser) {
-            matchingUser = { ...pUser, _id: pUser.id };
-            this.users.push(matchingUser);
-          }
-        } catch (e) {}
-      }
-
-      const candidateKeys = new Set<string>();
-      if (qId) candidateKeys.add(qId);
-      if (qEmail) candidateKeys.add(qEmail);
-      if (matchingUser) {
-        if (matchingUser._id) candidateKeys.add(matchingUser._id.toString().toLowerCase());
-        if (matchingUser.id) candidateKeys.add(matchingUser.id.toString().toLowerCase());
-        if (matchingUser.email) candidateKeys.add(matchingUser.email.toLowerCase());
-        if (matchingUser.phone) candidateKeys.add(matchingUser.phone.replace(/\D/g, ''));
-      }
-
-      result = result.filter((r) => {
-        const rId = (r.targetDonorId || '').toString().toLowerCase();
-        const rAltId = (r.targetDonorAltId || '').toString().toLowerCase();
-        const rEmail = (r.targetDonorEmail || '').toLowerCase();
-        const rPhone = (r.targetDonorPhone || '').replace(/\D/g, '');
-
-        if (rId && candidateKeys.has(rId)) return true;
-        if (rAltId && candidateKeys.has(rAltId)) return true;
-        if (rEmail && candidateKeys.has(rEmail)) return true;
-        if (qPhone && rPhone && (rPhone === qPhone || rPhone.endsWith(qPhone) || qPhone.endsWith(rPhone))) return true;
-
-        if (matchingUser) {
-          if (matchingUser.email && rEmail === matchingUser.email.toLowerCase()) return true;
-          if (matchingUser.id && (rId === matchingUser.id.toLowerCase() || rAltId === matchingUser.id.toLowerCase())) return true;
-          if (matchingUser._id && (rId === matchingUser._id.toString().toLowerCase() || rAltId === matchingUser._id.toString().toLowerCase())) return true;
-        }
-
-        // If request was created previously with only targetDonorId, cross-check against targetDonor in this.users
-        if (rId) {
-          const reqTargetUser = this.users.find((u) => {
-            const uId = (u._id || u.id || '').toString().toLowerCase();
-            return uId === rId;
-          });
-          if (reqTargetUser) {
-            const reqUserEmail = (reqTargetUser.email || '').toLowerCase();
-            const reqUserId = (reqTargetUser._id || reqTargetUser.id || '').toString().toLowerCase();
-            if (candidateKeys.has(reqUserEmail) || candidateKeys.has(reqUserId)) return true;
-          }
-        }
-
-        return false;
-      });
-    }
-    // Return latest first
     return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async createRequest(reqData: any) {
+    try {
+      let validRequesterId: string | null = null;
+      if (reqData.requesterId && reqData.requesterId !== 'anonymous' && reqData.requesterId !== 'unknown') {
+        const uExists = await prisma.user.findUnique({
+          where: { id: reqData.requesterId.toString() },
+          select: { id: true },
+        }).catch(() => null);
+        if (uExists) {
+          validRequesterId = uExists.id;
+        }
+      }
+
+      const created = await prisma.bloodRequest.create({
+        data: {
+          requesterId: validRequesterId,
+          requesterName: reqData.requesterName || 'Emergency Requester',
+          requesterPhone: reqData.requesterPhone || '+8801521711716',
+          patientName: reqData.patientName,
+          bloodGroup: reqData.bloodGroup,
+          unitsNeeded: Number(reqData.unitsNeeded || 1),
+          urgencyLevel: reqData.urgencyLevel || 'Urgent',
+          hospitalName: reqData.hospitalName,
+          hospitalAddress: reqData.hospitalAddress || '',
+          district: reqData.district || 'Dhaka',
+          division: reqData.division || 'Dhaka',
+          reason: reqData.reason || 'Emergency blood transfusion',
+          contactNumber: reqData.contactNumber || '+8801521711716',
+          requiredDate: reqData.requiredDate ? new Date(reqData.requiredDate) : new Date(),
+          status: reqData.status || 'Pending',
+          matchedDonorsCount: Number(reqData.matchedDonorsCount || 0),
+          assignedDonors: reqData.assignedDonors || [],
+        },
+      });
+
+      const newDoc = { ...created, _id: created.id };
+      this.requests.unshift(newDoc);
+      return newDoc;
+    } catch (err: any) {
+      console.warn('Prisma createRequest fallback to memory:', err?.message || err);
+    }
+
     const newDoc = {
       _id: new mongoose.Types.ObjectId().toString(),
       status: 'Pending',
@@ -781,12 +817,6 @@ class ResilientDataStore {
       ...reqData,
     };
     this.requests.unshift(newDoc);
-    this.savePersistentRequests();
-    if (this.isMongoConnected) {
-      try {
-        await BloodRequestModel.create(newDoc);
-      } catch (err) {}
-    }
     return newDoc;
   }
 
@@ -796,14 +826,62 @@ class ResilientDataStore {
     donorName?: string,
     action?: 'pledge' | 'cancel'
   ) {
+    const strId = id.toString();
+    try {
+      const current = await prisma.bloodRequest.findUnique({
+        where: { id: strId },
+      });
+
+      if (current) {
+        let assignedDonors = current.assignedDonors || [];
+        let matchedCount = current.matchedDonorsCount;
+        let newStatus = status || current.status;
+
+        if (action === 'cancel' || (!action && status === 'Pending' && donorName)) {
+          if (donorName) {
+            assignedDonors = assignedDonors.filter((d) => d !== donorName);
+            matchedCount = Math.max(0, matchedCount - 1);
+          }
+          if (assignedDonors.length === 0 && newStatus === 'In Progress') {
+            newStatus = 'Pending';
+          }
+        } else if (action === 'pledge' || (!action && status === 'In Progress' && donorName)) {
+          if (donorName && !assignedDonors.includes(donorName)) {
+            assignedDonors.push(donorName);
+            matchedCount = matchedCount + 1;
+          }
+          newStatus = 'In Progress';
+        }
+
+        const updated = await prisma.bloodRequest.update({
+          where: { id: strId },
+          data: {
+            status: newStatus,
+            assignedDonors,
+            matchedDonorsCount: matchedCount,
+            updatedAt: new Date(),
+          },
+        });
+
+        const mapped = { ...updated, _id: updated.id };
+        const idx = this.requests.findIndex(
+          (r) => (r._id || r.id)?.toString() === strId
+        );
+        if (idx !== -1) this.requests[idx] = mapped;
+        else this.requests.unshift(mapped);
+        return mapped;
+      }
+    } catch (err: any) {
+      console.warn('Prisma updateRequestStatus fallback:', err?.message || err);
+    }
+
     const idx = this.requests.findIndex(
-      (r) => r._id.toString() === id.toString()
+      (r) => (r._id || r.id)?.toString() === strId
     );
     if (idx !== -1) {
       if (status) {
         this.requests[idx].status = status as any;
       }
-
       if (action === 'cancel' || (!action && status === 'Pending' && donorName)) {
         if (donorName) {
           this.requests[idx].assignedDonors = (
@@ -820,47 +898,20 @@ class ResilientDataStore {
         ) {
           this.requests[idx].status = 'Pending';
         }
-      } else {
-        // Pledge action or default with donorName
-        if (donorName) {
-          if (!this.requests[idx].assignedDonors) {
-            this.requests[idx].assignedDonors = [];
-          }
-          if (!this.requests[idx].assignedDonors.includes(donorName)) {
-            this.requests[idx].assignedDonors.push(donorName);
-            this.requests[idx].matchedDonorsCount =
-              (this.requests[idx].matchedDonorsCount || 0) + 1;
-          }
-          if (this.requests[idx].status === 'Pending') {
-            this.requests[idx].status = 'In Progress';
-          }
+      } else if (donorName) {
+        if (!this.requests[idx].assignedDonors) {
+          this.requests[idx].assignedDonors = [];
+        }
+        if (!this.requests[idx].assignedDonors.includes(donorName)) {
+          this.requests[idx].assignedDonors.push(donorName);
+          this.requests[idx].matchedDonorsCount =
+            (this.requests[idx].matchedDonorsCount || 0) + 1;
+        }
+        if (this.requests[idx].status === 'Pending') {
+          this.requests[idx].status = 'In Progress';
         }
       }
-
       this.requests[idx].updatedAt = new Date();
-      this.savePersistentRequests();
-
-      if (this.isMongoConnected) {
-        try {
-          await BloodRequestModel.findByIdAndUpdate(
-            this.requests[idx]._id,
-            this.requests[idx]
-          );
-        } catch (err) {}
-      }
-
-      try {
-        await prisma.bloodRequest.update({
-          where: { id: this.requests[idx]._id },
-          data: {
-            assignedDonors: this.requests[idx].assignedDonors,
-            matchedDonorsCount: this.requests[idx].matchedDonorsCount,
-            status: this.requests[idx].status,
-            updatedAt: this.requests[idx].updatedAt,
-          },
-        });
-      } catch (err) {}
-
       return this.requests[idx];
     }
     return null;
@@ -868,14 +919,52 @@ class ResilientDataStore {
 
   // --- Inventories operations ---
   async getInventories(providerId?: string) {
+    try {
+      const where: any = {};
+      if (providerId) {
+        where.providerId = providerId.toString();
+      }
+      const dbInvs = await prisma.inventory.findMany({
+        where,
+        orderBy: { bloodGroup: 'asc' },
+      });
+      if (dbInvs && dbInvs.length > 0) {
+        this.inventories = dbInvs.map((i) => ({ ...i, _id: i.id }));
+        return this.inventories;
+      }
+    } catch (err: any) {
+      console.warn('Prisma getInventories fallback:', err?.message || err);
+    }
+
     if (providerId) {
-      return this.inventories.filter((i) => i.providerId.toString() === providerId.toString());
+      return this.inventories.filter((i) => (i.providerId || '').toString() === providerId.toString());
     }
     return this.inventories;
   }
 
   async updateInventory(id: string, unitsInStock: number, criticalThreshold?: number) {
-    const idx = this.inventories.findIndex((i) => i._id.toString() === id.toString());
+    const strId = id.toString();
+    try {
+      const data: any = {
+        unitsInStock: Number(unitsInStock),
+        lastUpdated: new Date(),
+      };
+      if (criticalThreshold !== undefined) {
+        data.criticalThreshold = Number(criticalThreshold);
+      }
+      const updated = await prisma.inventory.update({
+        where: { id: strId },
+        data,
+      });
+      const mapped = { ...updated, _id: updated.id };
+      const idx = this.inventories.findIndex((i) => (i._id || i.id)?.toString() === strId);
+      if (idx !== -1) this.inventories[idx] = mapped;
+      return mapped;
+    } catch (err: any) {
+      console.warn('Prisma updateInventory fallback:', err?.message || err);
+    }
+
+    const idx = this.inventories.findIndex((i) => (i._id || i.id)?.toString() === strId);
     if (idx !== -1) {
       this.inventories[idx].unitsInStock = unitsInStock;
       if (criticalThreshold !== undefined) {
@@ -889,10 +978,54 @@ class ResilientDataStore {
 
   // --- Camps operations ---
   async getCamps() {
+    try {
+      const dbCamps = await prisma.camp.findMany({
+        orderBy: { startDate: 'asc' },
+      });
+      if (dbCamps && dbCamps.length > 0) {
+        this.camps = dbCamps.map((c) => ({ ...c, _id: c.id }));
+        return this.camps;
+      }
+    } catch (err: any) {
+      console.warn('Prisma getCamps fallback:', err?.message || err);
+    }
     return [...this.camps].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
   }
 
   async createCamp(campData: any) {
+    try {
+      let validProviderId = null;
+      if (campData.providerId) {
+        const pExists = await prisma.user.findUnique({ where: { id: campData.providerId.toString() } }).catch(() => null);
+        if (pExists) validProviderId = pExists.id;
+      }
+
+      const created = await prisma.camp.create({
+        data: {
+          providerId: validProviderId,
+          providerName: campData.providerName || 'DropOfLife Partner Hospital',
+          title: campData.title,
+          description: campData.description || '',
+          venueAddress: campData.venueAddress,
+          district: campData.district || 'Dhaka',
+          division: campData.division || 'Dhaka',
+          startDate: campData.startDate ? new Date(campData.startDate) : new Date(),
+          endDate: campData.endDate ? new Date(campData.endDate) : new Date(),
+          targetUnits: Number(campData.targetUnits || 100),
+          collectedUnits: Number(campData.collectedUnits || 0),
+          status: campData.status || 'Upcoming',
+          contactPhone: campData.contactPhone || '+8801521711716',
+          volunteersCount: Number(campData.volunteersCount || 0),
+          registeredVolunteers: campData.registeredVolunteers || [],
+        },
+      });
+      const newDoc = { ...created, _id: created.id };
+      this.camps.push(newDoc);
+      return newDoc;
+    } catch (err: any) {
+      console.warn('Prisma createCamp fallback:', err?.message || err);
+    }
+
     const newDoc = {
       _id: new mongoose.Types.ObjectId().toString(),
       collectedUnits: 0,
@@ -907,30 +1040,37 @@ class ResilientDataStore {
   }
 
   async registerCampVolunteer(campId: string, volunteerName: string) {
-    const camp = this.camps.find((c) => c._id.toString() === campId.toString());
+    const strId = campId.toString();
+    try {
+      const current = await prisma.camp.findUnique({ where: { id: strId } });
+      if (current) {
+        let volunteers = current.registeredVolunteers || [];
+        if (!volunteers.includes(volunteerName)) {
+          volunteers.push(volunteerName);
+        }
+        const updated = await prisma.camp.update({
+          where: { id: strId },
+          data: {
+            registeredVolunteers: volunteers,
+            volunteersCount: volunteers.length,
+            updatedAt: new Date(),
+          },
+        });
+        const mapped = { ...updated, _id: updated.id };
+        const idx = this.camps.findIndex((c) => (c._id || c.id)?.toString() === strId);
+        if (idx !== -1) this.camps[idx] = mapped;
+        return mapped;
+      }
+    } catch (err: any) {
+      console.warn('Prisma registerCampVolunteer fallback:', err?.message || err);
+    }
+
+    const camp = this.camps.find((c) => (c._id || c.id)?.toString() === strId);
     if (camp) {
       if (!camp.registeredVolunteers.includes(volunteerName)) {
         camp.registeredVolunteers.push(volunteerName);
         camp.volunteersCount = camp.registeredVolunteers.length;
       }
-      if (this.isMongoConnected) {
-        try {
-          await CampModel.findByIdAndUpdate(camp._id, {
-            registeredVolunteers: camp.registeredVolunteers,
-            volunteersCount: camp.volunteersCount,
-          });
-        } catch (err) {}
-      }
-      try {
-        await prisma.camp.update({
-          where: { id: camp._id },
-          data: {
-            registeredVolunteers: camp.registeredVolunteers,
-            volunteersCount: camp.volunteersCount,
-            updatedAt: new Date(),
-          },
-        });
-      } catch (err) {}
       return camp;
     }
     return null;
@@ -938,6 +1078,33 @@ class ResilientDataStore {
 
   // --- Payments ---
   async recordPayment(paymentData: any) {
+    try {
+      let validUserId = null;
+      if (paymentData.userId) {
+        const uExists = await prisma.user.findUnique({ where: { id: paymentData.userId.toString() } }).catch(() => null);
+        if (uExists) validUserId = uExists.id;
+      }
+
+      const created = await prisma.payment.create({
+        data: {
+          userId: validUserId,
+          userName: paymentData.userName || 'Lifesaver Supporter',
+          userEmail: paymentData.userEmail || 'supporter@dropoflife.org',
+          stripePaymentIntentId: paymentData.stripePaymentIntentId || `pi_${Date.now()}`,
+          amount: Number(paymentData.amount) || 1000,
+          currency: (paymentData.currency || 'bdt').toLowerCase(),
+          paymentPurpose: paymentData.paymentPurpose || 'Lifesaver_Supporter_Fund',
+          status: paymentData.status || 'succeeded',
+          receiptUrl: paymentData.receiptUrl || '',
+        },
+      });
+      const mapped = { ...created, _id: created.id };
+      this.payments.unshift(mapped);
+      return mapped;
+    } catch (err: any) {
+      console.warn('Prisma recordPayment fallback:', err?.message || err);
+    }
+
     const payment = {
       _id: new mongoose.Types.ObjectId().toString(),
       createdAt: new Date(),
@@ -947,8 +1114,43 @@ class ResilientDataStore {
     return payment;
   }
 
+  async getPayments() {
+    try {
+      const dbPayments = await prisma.payment.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      if (dbPayments && dbPayments.length > 0) {
+        this.payments = dbPayments.map((p) => ({ ...p, _id: p.id }));
+        return this.payments;
+      }
+    } catch (err: any) {
+      console.warn('Prisma getPayments fallback:', err?.message || err);
+    }
+    return [...this.payments].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
   // --- Reviews Operations ---
   async addReview(reviewData: any) {
+    try {
+      const created = await prisma.review.create({
+        data: {
+          donorId: reviewData.donorId?.toString() || '',
+          donorName: reviewData.donorName || '',
+          reviewerName: reviewData.reviewerName || 'Donor Supporter',
+          reviewerContact: reviewData.reviewerContact || '',
+          rating: Number(reviewData.rating) || 5.0,
+          comment: reviewData.comment || '',
+        },
+      });
+      const mapped = { ...created, _id: created.id };
+      this.reviews.unshift(mapped);
+      return mapped;
+    } catch (err: any) {
+      console.warn('Prisma addReview fallback:', err?.message || err);
+    }
+
     const newReview = {
       _id: new mongoose.Types.ObjectId().toString(),
       createdAt: new Date(),
@@ -959,6 +1161,21 @@ class ResilientDataStore {
   }
 
   async getReviews(donorId?: string) {
+    try {
+      const where: any = donorId ? { donorId: donorId.toString() } : {};
+      const dbReviews = await prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      if (dbReviews && dbReviews.length > 0) {
+        const mapped = dbReviews.map((r) => ({ ...r, _id: r.id }));
+        if (!donorId) this.reviews = mapped;
+        return mapped;
+      }
+    } catch (err: any) {
+      console.warn('Prisma getReviews fallback:', err?.message || err);
+    }
+
     if (donorId) {
       return this.reviews
         .filter((r) => r.donorId?.toString() === donorId.toString())
@@ -971,6 +1188,27 @@ class ResilientDataStore {
 
   // --- Complaints & Issue Reports Operations ---
   async addComplaint(complaintData: any) {
+    try {
+      const created = await prisma.complaint.create({
+        data: {
+          type: complaintData.type || 'misbehavior',
+          category: complaintData.category || 'General Report',
+          reportedUserId: complaintData.reportedUserId || null,
+          reportedUserName: complaintData.reportedUserName || null,
+          reporterName: complaintData.reporterName || 'Anonymous',
+          reporterContact: complaintData.reporterContact || '',
+          description: complaintData.description || '',
+          status: 'Pending',
+          adminNotes: complaintData.adminNotes || '',
+        },
+      });
+      const mapped = { ...created, _id: created.id };
+      this.complaints.unshift(mapped);
+      return mapped;
+    } catch (err: any) {
+      console.warn('Prisma addComplaint fallback:', err?.message || err);
+    }
+
     const newDoc = {
       _id: new mongoose.Types.ObjectId().toString(),
       status: 'Pending',
@@ -983,6 +1221,23 @@ class ResilientDataStore {
   }
 
   async getComplaints(filter?: { type?: string; status?: string }) {
+    try {
+      const where: any = {};
+      if (filter?.type) where.type = filter.type;
+      if (filter?.status) where.status = filter.status;
+      const dbComplaints = await prisma.complaint.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      if (dbComplaints && dbComplaints.length > 0) {
+        const mapped = dbComplaints.map((c) => ({ ...c, _id: c.id }));
+        if (!filter?.type && !filter?.status) this.complaints = mapped;
+        return mapped;
+      }
+    } catch (err: any) {
+      console.warn('Prisma getComplaints fallback:', err?.message || err);
+    }
+
     let result = [...this.complaints];
     if (filter?.type) {
       result = result.filter((c) => c.type === filter.type);
@@ -996,7 +1251,25 @@ class ResilientDataStore {
   }
 
   async updateComplaintStatus(id: string, status: string, adminNotes?: string) {
-    const idx = this.complaints.findIndex((c) => c._id.toString() === id.toString());
+    const strId = id.toString();
+    try {
+      const updated = await prisma.complaint.update({
+        where: { id: strId },
+        data: {
+          status,
+          adminNotes: adminNotes !== undefined ? adminNotes : undefined,
+          updatedAt: new Date(),
+        },
+      });
+      const mapped = { ...updated, _id: updated.id };
+      const idx = this.complaints.findIndex((c) => (c._id || c.id)?.toString() === strId);
+      if (idx !== -1) this.complaints[idx] = mapped;
+      return mapped;
+    } catch (err: any) {
+      console.warn('Prisma updateComplaintStatus fallback:', err?.message || err);
+    }
+
+    const idx = this.complaints.findIndex((c) => (c._id || c.id)?.toString() === strId);
     if (idx !== -1) {
       this.complaints[idx].status = status;
       if (adminNotes !== undefined) {
@@ -1010,7 +1283,26 @@ class ResilientDataStore {
 
   // --- User Suspension Operations ---
   async suspendUser(userId: string, isSuspended: boolean, reason?: string) {
-    const idx = this.users.findIndex((u) => u._id.toString() === userId.toString());
+    const strId = userId.toString();
+    try {
+      const updated = await prisma.user.update({
+        where: { id: strId },
+        data: {
+          isSuspended,
+          suspendedReason: reason || (isSuspended ? 'Violated community guidelines' : ''),
+          isAvailable: isSuspended ? false : undefined,
+          updatedAt: new Date(),
+        },
+      });
+      const mapped = { ...updated, _id: updated.id };
+      const idx = this.users.findIndex((u) => (u._id || u.id)?.toString() === strId);
+      if (idx !== -1) this.users[idx] = mapped;
+      return mapped;
+    } catch (err: any) {
+      console.warn('Prisma suspendUser fallback:', err?.message || err);
+    }
+
+    const idx = this.users.findIndex((u) => (u._id || u.id)?.toString() === strId);
     if (idx !== -1) {
       this.users[idx].isSuspended = isSuspended;
       this.users[idx].suspendedReason = reason || (isSuspended ? 'Violated community guidelines' : '');
@@ -1035,17 +1327,24 @@ class ResilientDataStore {
         fulfilledRequests,
         totalComplaints,
         pendingComplaints,
+        totalCampsOrganized,
+        invAggregate,
+        recentRequests,
       ] = await Promise.all([
-        prisma.user.count({ where: { role: 'donor' } }),
-        prisma.user.count({ where: { role: 'donor', isAvailable: true, isSuspended: false } }),
-        prisma.user.count({ where: { isSuspended: true } }),
-        prisma.user.count({ where: { role: 'provider' } }),
+        prisma.user.count({ where: { role: 'donor' } }).catch(() => 0),
+        prisma.user.count({ where: { role: 'donor', isAvailable: true, isSuspended: false } }).catch(() => 0),
+        prisma.user.count({ where: { isSuspended: true } }).catch(() => 0),
+        prisma.user.count({ where: { role: 'provider' } }).catch(() => 0),
         prisma.bloodRequest.count({ where: { status: { in: ['Pending', 'In Progress'] } } }).catch(() => 0),
         prisma.bloodRequest.count({ where: { status: 'Fulfilled' } }).catch(() => 0),
         prisma.complaint.count().catch(() => 0),
         prisma.complaint.count({ where: { status: 'Pending' } }).catch(() => 0),
+        prisma.camp.count().catch(() => 0),
+        prisma.inventory.aggregate({ _sum: { unitsInStock: true } }).catch(() => ({ _sum: { unitsInStock: 0 } })),
+        prisma.bloodRequest.findMany({ take: 5, orderBy: { createdAt: 'desc' } }).catch(() => []),
       ]);
-      const totalUnitsInStock = this.inventories.reduce((acc, curr) => acc + curr.unitsInStock, 0);
+
+      const totalUnitsInStock = invAggregate._sum?.unitsInStock ?? this.inventories.reduce((acc, curr) => acc + curr.unitsInStock, 0);
 
       return {
         totalDonors: totalDonors || this.users.filter((u) => u.role === 'donor').length,
@@ -1056,10 +1355,10 @@ class ResilientDataStore {
         fulfilledRequests: fulfilledRequests || this.requests.filter((r) => r.status === 'Fulfilled').length,
         totalUnitsInStock,
         totalLivesSaved: (fulfilledRequests || 1) * 3 + 142,
-        totalCampsOrganized: this.camps.length,
+        totalCampsOrganized: totalCampsOrganized || this.camps.length,
         totalComplaints: totalComplaints || this.complaints.length,
         pendingComplaints: pendingComplaints || this.complaints.filter((c) => c.status === 'Pending').length,
-        recentRequests: this.requests.slice(0, 5),
+        recentRequests: recentRequests.length > 0 ? recentRequests.map((r) => ({ ...r, _id: r.id })) : this.requests.slice(0, 5),
       };
     } catch (err) {
       const totalDonors = this.users.filter((u) => u.role === 'donor').length;
