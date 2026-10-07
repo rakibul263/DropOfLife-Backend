@@ -117,6 +117,14 @@ const loginUser = async (payload: ILoginUser) => {
     }
   }
 
+  // Ensure hospital users are strictly typed as provider
+  if (
+    (user.email || '').toLowerCase().trim().startsWith('hospital@') ||
+    user.role === 'hospital'
+  ) {
+    user.role = 'provider';
+  }
+
   const accessToken = jwtHelpers.createAccessToken({
     id: user._id,
     email: user.email,

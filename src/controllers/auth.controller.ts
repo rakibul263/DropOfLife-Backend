@@ -157,6 +157,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    if ((user.email || '').toLowerCase().trim().startsWith('hospital@') || user.role === 'hospital') {
+      user.role = 'provider';
+    }
+
     const token = jwt.sign(
       {
         id: user._id,
