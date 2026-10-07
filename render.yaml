@@ -16,7 +16,7 @@ services:
       - key: CLIENT_URL
         sync: false # Set to your Vercel frontend URL, e.g. https://dropoflife.vercel.app
       - key: DATABASE_URL
-        sync: false # Neon PostgreSQL URL
+        value: postgresql://neondb_owner:npg_0XIlEoL3MWQi@ep-empty-cherry-b3u7mae5-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN

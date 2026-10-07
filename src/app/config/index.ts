@@ -8,7 +8,7 @@ export const config = {
   mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/dropoflife',
   databaseUrl:
     process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/dropoflife?schema=public',
+    'postgresql://neondb_owner:npg_0XIlEoL3MWQi@ep-empty-cherry-b3u7mae5-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
   jwtSecret: process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'dropoflife_jwt_secret_lifesaver_2026',
   jwtExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || process.env.JWT_EXPIRES_IN || '1d',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'dropoflife_jwt_refresh_secret_2026',
